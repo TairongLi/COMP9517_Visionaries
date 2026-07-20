@@ -1,0 +1,12 @@
+data/
+data_fake/
+runs/
+*.pt
+*.pth
+*.tar.gz
+*.npz
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
