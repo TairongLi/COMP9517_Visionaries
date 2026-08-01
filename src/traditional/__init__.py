@@ -1,6 +1,7 @@
 """Traditional computer-vision methods for species classification."""
 
 from .dataset import (
+    build_manifest_from_folders,
     count_images_per_class,
     count_images_per_split,
     get_class_names,
@@ -24,6 +25,7 @@ from .features import (
 
 __all__ = [
     "FEATURES",
+    "build_manifest_from_folders",
     "color_histogram",
     "color_lbp_feature",
     "color_moments",
