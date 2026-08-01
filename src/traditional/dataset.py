@@ -24,6 +24,99 @@ VALID_SPLITS = {
     "test",
 }
 
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
+
+def build_manifest_from_folders(
+    train_dir,
+    test_dir,
+    validation_per_class=10,
+    seed=42,
+):
+    """Build the shared split table directly from the selected image folders.
+
+    The selected train_mini directory contains 50 images per class. A fixed
+    random subset is used for validation and the official iNat validation
+    directory is kept exclusively as the final test set.
+    """
+
+    train_dir = Path(train_dir).resolve()
+    test_dir = Path(test_dir).resolve()
+
+    if not train_dir.is_dir():
+        raise NotADirectoryError(f"Training directory does not exist: {train_dir}")
+    if not test_dir.is_dir():
+        raise NotADirectoryError(f"Test directory does not exist: {test_dir}")
+    if validation_per_class <= 0:
+        raise ValueError("validation_per_class must be positive")
+
+    train_classes = {path.name: path for path in train_dir.iterdir() if path.is_dir()}
+    test_classes = {path.name: path for path in test_dir.iterdir() if path.is_dir()}
+
+    if set(train_classes) != set(test_classes):
+        missing_test = sorted(set(train_classes) - set(test_classes))
+        missing_train = sorted(set(test_classes) - set(train_classes))
+        raise ValueError(
+            "Training and test class folders do not match. "
+            f"Missing from test: {missing_test[:5]}; "
+            f"missing from train: {missing_train[:5]}"
+        )
+
+    rng = np.random.default_rng(seed)
+    rows = []
+
+    for class_id, folder_name in enumerate(sorted(train_classes)):
+        species_name = " ".join(folder_name.split("_")[-2:])
+        train_files = sorted(
+            path
+            for path in train_classes[folder_name].iterdir()
+            if path.suffix.lower() in IMAGE_EXTENSIONS
+        )
+        test_files = sorted(
+            path
+            for path in test_classes[folder_name].iterdir()
+            if path.suffix.lower() in IMAGE_EXTENSIONS
+        )
+
+        if len(train_files) <= validation_per_class:
+            raise ValueError(
+                f"{folder_name} has only {len(train_files)} train_mini images"
+            )
+
+        validation_indices = set(
+            rng.choice(
+                len(train_files),
+                size=validation_per_class,
+                replace=False,
+            ).tolist()
+        )
+
+        for index, path in enumerate(train_files):
+            rows.append(
+                {
+                    "filepath": str(path),
+                    "class_id": class_id,
+                    "species_name": species_name,
+                    "split": (
+                        "validation" if index in validation_indices else "train"
+                    ),
+                }
+            )
+
+        for path in test_files:
+            rows.append(
+                {
+                    "filepath": str(path),
+                    "class_id": class_id,
+                    "species_name": species_name,
+                    "split": "test",
+                }
+            )
+
+    dataframe = pd.DataFrame(rows)
+    _validate_class_mapping(dataframe)
+    return dataframe
+
 
 def load_manifest(manifest_path):
     """Load and validate the shared dataset manifest.
@@ -251,7 +344,7 @@ def iter_split(
 
     for row in rows.itertuples(index=False):
         relative_path = Path(row.filepath)
-        full_path = image_root / relative_path
+        full_path = relative_path if relative_path.is_absolute() else image_root / relative_path
 
         image = load_rgb_image(
             full_path,
