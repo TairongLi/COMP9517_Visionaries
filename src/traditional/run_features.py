@@ -109,7 +109,14 @@ def extract_bovw_rows(rows, codebook, k, normalization):
     return output
 
 
-def train_codebook(rows, k, per_image, codebook_images, seed):
+def train_codebook(
+    rows,
+    k,
+    per_image,
+    codebook_images,
+    max_codebook_descriptors,
+    seed,
+):
     """Sample a bounded training subset and build the visual vocabulary."""
 
     sample_count = min(codebook_images, len(rows))
@@ -126,6 +133,7 @@ def train_codebook(rows, k, per_image, codebook_images, seed):
         sampled_images,
         per_image=per_image,
         seed=seed,
+        max_total=max_codebook_descriptors,
     )
     return bovw.build_codebook(descriptors, k=k, seed=seed)
 
@@ -192,6 +200,7 @@ def run_bovw(args, dataframe, class_names):
         args.k,
         args.per_image,
         args.codebook_images,
+        getattr(args, "max_codebook_descriptors", 200000),
         args.seed,
     )
     train_features = extract_bovw_rows(
@@ -200,7 +209,22 @@ def run_bovw(args, dataframe, class_names):
         args.k,
         args.normalization,
     )
-    classifier = bovw.build_classifier(args.classifier, seed=args.seed)
+    classifier_parameters = (
+        {
+            "C": getattr(args, "svm_c", 1.0),
+            "class_weight": getattr(args, "class_weight", None),
+        }
+        if args.classifier == "linear_svm"
+        else {
+            "n_estimators": getattr(args, "rf_estimators", 200),
+            "class_weight": getattr(args, "class_weight", None),
+        }
+    )
+    classifier = bovw.build_classifier(
+        args.classifier,
+        seed=args.seed,
+        **classifier_parameters,
+    )
     classifier.fit(train_features, train_rows["class_id"].to_numpy())
     train_s = time.perf_counter() - start
 
@@ -236,11 +260,15 @@ def parse_arguments():
     parser.add_argument("--hog-orientations", type=int, default=9)
     parser.add_argument("--hog-cell-size", type=int, default=16)
     parser.add_argument("--classifier", choices=["linear_svm", "random_forest"], default="linear_svm")
+    parser.add_argument("--svm-c", type=float, default=1.0)
+    parser.add_argument("--rf-estimators", type=int, default=200)
+    parser.add_argument("--class-weight", choices=["balanced"], default=None)
     parser.add_argument("--sgd-alpha", type=float, default=1e-4)
     parser.add_argument("--sgd-max-iter", type=int, default=100)
     parser.add_argument("--k", type=int, default=512)
     parser.add_argument("--per-image", type=int, default=100)
     parser.add_argument("--codebook-images", type=int, default=2000)
+    parser.add_argument("--max-codebook-descriptors", type=int, default=200000)
     parser.add_argument("--normalization", choices=["l1", "l2", "hellinger"], default="hellinger")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output-dir", default="results")

@@ -118,20 +118,35 @@ def sift_descriptors(img, max_kp=None):
     return np.ascontiguousarray(descriptors, dtype=np.float32)
 
 
-def sample_train_descriptors(train_images, per_image=100, seed=0):
+def sample_train_descriptors(
+    train_images,
+    per_image=100,
+    seed=0,
+    max_total=None,
+):
     """Randomly sample up to ``per_image`` SIFT vectors from each image.
 
     Sampling gives every training image a similar contribution to the visual
     vocabulary and prevents large, highly textured images from dominating it.
-    Images without SIFT keypoints are safely skipped.
+    Images without SIFT keypoints are safely skipped. If ``max_total`` is
+    provided, reservoir sampling keeps memory bounded while giving every
+    sampled descriptor an equal probability of entering the codebook set.
     """
 
     per_image = _positive_integer(per_image, "per_image")
+    if max_total is not None:
+        max_total = _positive_integer(max_total, "max_total")
     if not isinstance(train_images, Iterable):
         raise TypeError("train_images must be an iterable of RGB images")
 
     rng = np.random.default_rng(seed)
     sampled = []
+    reservoir = (
+        None
+        if max_total is None
+        else np.empty((max_total, SIFT_DESCRIPTOR_SIZE), dtype=np.float32)
+    )
+    descriptors_seen = 0
 
     for image in train_images:
         descriptors = sift_descriptors(image)
@@ -140,8 +155,21 @@ def sample_train_descriptors(train_images, per_image=100, seed=0):
         if len(descriptors) > per_image:
             indices = rng.choice(len(descriptors), size=per_image, replace=False)
             descriptors = descriptors[indices]
-        sampled.append(descriptors)
+        if reservoir is None:
+            sampled.append(descriptors)
+            continue
 
+        for descriptor in descriptors:
+            if descriptors_seen < max_total:
+                reservoir[descriptors_seen] = descriptor
+            else:
+                replacement = int(rng.integers(0, descriptors_seen + 1))
+                if replacement < max_total:
+                    reservoir[replacement] = descriptor
+            descriptors_seen += 1
+
+    if reservoir is not None:
+        return reservoir[: min(descriptors_seen, max_total)].copy()
     if not sampled:
         return np.empty((0, SIFT_DESCRIPTOR_SIZE), dtype=np.float32)
     return np.ascontiguousarray(np.vstack(sampled), dtype=np.float32)
@@ -243,7 +271,7 @@ def encode_split(images, codebook, k, **kwargs):
     return features
 
 
-def build_classifier(name="linear_svm", seed=0):
+def build_classifier(name="linear_svm", seed=0, **parameters):
     """Create one of the two classifiers required by traditional-C.
 
     ``linear_svm`` is normally the stronger and faster BoVW baseline.
@@ -252,13 +280,17 @@ def build_classifier(name="linear_svm", seed=0):
 
     name = str(name).lower()
     if name == "linear_svm":
-        return LinearSVC(random_state=seed)
+        defaults = {"C": 1.0, "class_weight": None}
+        defaults.update(parameters)
+        return LinearSVC(random_state=seed, **defaults)
     if name == "random_forest":
-        return RandomForestClassifier(
-            n_estimators=200,
-            random_state=seed,
-            n_jobs=-1,
-        )
+        defaults = {
+            "n_estimators": 200,
+            "class_weight": None,
+            "n_jobs": -1,
+        }
+        defaults.update(parameters)
+        return RandomForestClassifier(random_state=seed, **defaults)
     raise ValueError(
         f"Unknown classifier '{name}'. Expected 'linear_svm' or "
         "'random_forest'"
