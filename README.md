@@ -1,3 +1,4 @@
+```
 +---notebooks
 |       01_cnn_baseline_lr1e-3.ipynb
 |       02_cnn_baseline_lr1e-2.ipynb
@@ -67,7 +68,7 @@
             __init__.cpython-311.pyc
             __init__.cpython-312.pyc
             __init__.cpython-313.pyc# Image Classification Project
-
+```
 This project contains implementations of both deep learning and traditional machine learning methods for image classification. It includes training scripts, evaluation notebooks, visualization tools, and feature extraction pipelines.
 
 ---
