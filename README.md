@@ -75,8 +75,6 @@ This project contains implementations of both deep learning and traditional mach
 
 ---
 
----
-
 # notebooks/
 
 The notebooks are used for experiments, model training, evaluation, and visualization.
