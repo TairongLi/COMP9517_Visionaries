@@ -1,3 +1,5 @@
+
+## Project Structure
 ```
 +---notebooks
 |       01_cnn_baseline_lr1e-3.ipynb
@@ -72,15 +74,6 @@
 This project contains implementations of both deep learning and traditional machine learning methods for image classification. It includes training scripts, evaluation notebooks, visualization tools, and feature extraction pipelines.
 
 ---
-
-## Project Structure
-
-```
-.
-├── notebooks/
-├── src/
-└── README.md
-```
 
 ---
 
