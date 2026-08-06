@@ -1,5 +1,5 @@
 
-## Project Structure
+# Project Structure
 ```
 +---notebooks
 |       01_cnn_baseline_lr1e-3.ipynb
